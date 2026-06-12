@@ -116,11 +116,14 @@
             if (timerInterval !== -1) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 segundosRestantes--;
+                
+                // 🌟 AGREGAMOS ESTA LÍNEA PARA QUE EL NÚMERO DISMINUYA EN PANTALLA
+                document.getElementById("countdown").textContent = segundosRestantes;
+
                 if (segundosRestantes <= 0) {
                     actualizarQR();
                     segundosRestantes = 30;
                 }
-                document.getElementById("countdown").textContent = segundosRestantes;
             }, 1000);
         }
 
