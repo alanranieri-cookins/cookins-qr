@@ -46,8 +46,7 @@
     <script>
         let datosUsuarios = {};
         let timerInterval = -1;
-        let segundosRestantes = 30;
-        let qrGenerador = null; // Declaramos la variable globalmente
+        let qrGenerador = null;
 
         // Leemos el archivo JSON rompiendo el caché
         fetch('datos_qr.json?v=' + Date.now())
@@ -85,9 +84,8 @@
             document.getElementById("pantalla-credencial").style.display = "block";
 
             const qrContenedor = document.getElementById("qrcode");
-            qrContenedor.innerHTML = ""; // Limpiamos cualquier intento previo
+            qrContenedor.innerHTML = ""; 
 
-            // Instanciamos el generador de QR asegurando parámetros limpios
             qrGenerador = new QRCode(qrContenedor, {
                 text: "Inicializando...",
                 width: 220,
@@ -98,33 +96,33 @@
             });
 
             const totp = JSOTP.totp(user.semilla, { interval: 30 });
+            let ultimoToken = "";
 
-            function actualizarQR() {
-                const tokenActual = totp.now();
-                const cadenaFinal = dni + "-" + tokenActual;
-                console.log("Generando QR para:", cadenaFinal); // Para revisar en F12 si hiciera falta
-                qrGenerador.makeCode(cadenaFinal);
-            }
-
-            // Sincronización del segundero mundial
-            segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
-            document.getElementById("countdown").textContent = segundosRestantes;
-            
-            // Forzamos el primer renderizado con un delay de 100ms para darle tiempo al HTML
-            setTimeout(actualizarQR, 100);
-
-            if (timerInterval !== -1) clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                segundosRestantes--;
+            function actualizarRelojYQR() {
+                // 1. Calculamos los segundos exactos que le quedan al bloque actual de 30s del mundo
+                let segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
                 
-                // 🌟 AGREGAMOS ESTA LÍNEA PARA QUE EL NÚMERO DISMINUYA EN PANTALLA
+                // Si el cálculo da 30, visualmente mostramos 0 o 30 según prefieras, lo dejamos en sincronía
                 document.getElementById("countdown").textContent = segundosRestantes;
 
-                if (segundosRestantes <= 0) {
-                    actualizarQR();
-                    segundosRestantes = 30;
+                // 2. Generamos el token actual
+                const tokenActual = totp.now();
+                
+                // 3. SOLO redibujamos el QR si el token realmente cambió (para evitar que parpadee la pantalla cada 1 segundo)
+                if (tokenActual !== ultimoToken) {
+                    ultimoToken = tokenActual;
+                    const cadenaFinal = dni + "-" + tokenActual;
+                    console.log("Nuevo QR generado:", cadenaFinal);
+                    qrGenerador.makeCode(cadenaFinal);
                 }
-            }, 1000);
+            }
+
+            // Primer disparo inmediato para dibujar el QR y clavar el primer número en pantalla
+            setTimeout(actualizarRelojYQR, 100);
+
+            // Reloj infinito que revisa y descuenta el tiempo de forma estricta cada 1 segundo (1000ms)
+            if (timerInterval !== -1) clearInterval(timerInterval);
+            timerInterval = setInterval(actualizarRelojYQR, 1000);
         }
 
         function desvincular() {
