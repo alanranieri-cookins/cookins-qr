@@ -48,81 +48,120 @@
         let timerInterval = -1;
         let qrGenerador = null;
 
+        // Función auxiliar para mostrar errores directo en la pantalla si algo se rompe
+        function registrarError(mensaje, err) {
+            console.error(mensaje, err);
+            const contenedor = document.getElementById("pantalla-credencial");
+            if (contenedor) {
+                let divErr = document.getElementById("debug-error");
+                if (!divErr) {
+                    divErr = document.createElement("div");
+                    divErr.id = "debug-error";
+                    divErr.style.color = "red";
+                    divErr.style.fontSize = "0.8rem";
+                    divErr.style.marginTop = "15px";
+                    divErr.style.fontWeight = "bold";
+                    contenedor.appendChild(divErr);
+                }
+                divErr.innerHTML = mensaje + ": " + (err ? err.message : "");
+            }
+        }
+
         // Leemos el archivo JSON rompiendo el caché
         fetch('datos_qr.json?v=' + Date.now())
             .then(res => res.json())
             .then(data => {
                 datosUsuarios = data;
-                verificarSesion();
+                verificarSession();
             })
-            .catch(() => alert("⚠️ Error al cargar los datos. Verifique datos_qr.json"));
+            .catch((err) => alert("⚠️ Error al cargar los datos. Verifique datos_qr.json"));
 
-        function verificarSesion() {
-            const dniGuardado = localStorage.getItem("cookins_dni");
-            if (dniGuardado && datosUsuarios[dniGuardado]) {
-                mostrarCredencial(dniGuardado);
-            } else {
-                document.getElementById("pantalla-registro").style.display = "block";
+        function verificarSession() {
+            try {
+                const dniGuardado = localStorage.getItem("cookins_dni");
+                if (dniGuardado && datosUsuarios[dniGuardado]) {
+                    mostrarCredencial(dniGuardado);
+                } else {
+                    document.getElementById("pantalla-registro").style.display = "block";
+                }
+            } catch (err) {
+                registrarError("Error en verificarSession", err);
             }
         }
 
         function vincularUsuario() {
-            const dniInput = String(document.getElementById("input-dni").value).trim();
-            if (datosUsuarios[dniInput]) {
-                localStorage.setItem("cookins_dni", dniInput);
-                document.getElementById("pantalla-registro").style.display = "none";
-                mostrarCredencial(dniInput);
-            } else {
-                alert("❌ El DNI ingresado no está habilitado.");
+            try {
+                const dniInput = String(document.getElementById("input-dni").value).trim();
+                if (datosUsuarios[dniInput]) {
+                    localStorage.setItem("cookins_dni", dniInput);
+                    document.getElementById("pantalla-registro").style.display = "none";
+                    mostrarCredencial(dniInput);
+                } else {
+                    alert("❌ El DNI ingresado no está habilitado.");
+                }
+            } catch (err) {
+                registrarError("Error en vincularUsuario", err);
             }
         }
 
         function mostrarCredencial(dni) {
-            const user = datosUsuarios[dni];
-            document.getElementById("txt-nombre").textContent = user.nombre;
-            document.getElementById("txt-legajo").textContent = "LEGAJO: " + user.legajo;
-            document.getElementById("pantalla-credencial").style.display = "block";
+            try {
+                const user = datosUsuarios[dni];
+                document.getElementById("txt-nombre").textContent = user.nombre;
+                document.getElementById("txt-legajo").textContent = "LEGAJO: " + user.legajo;
+                document.getElementById("pantalla-credencial").style.display = "block";
 
-            const qrContenedor = document.getElementById("qrcode");
-            qrContenedor.innerHTML = ""; 
+                const qrContenedor = document.getElementById("qrcode");
+                qrContenedor.innerHTML = ""; 
 
-            qrGenerador = new QRCode(qrContenedor, {
-                text: "Inicializando...",
-                width: 220,
-                height: 220,
-                colorDark : "#000000",
-                colorLight : "#ffffff",
-                correctLevel : QRCode.CorrectLevel.H
-            });
+                qrGenerador = new QRCode(qrContenedor, {
+                    text: "Inicializando...",
+                    width: 220,
+                    height: 220,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
 
-            const totp = JSOTP.totp(user.semilla, { interval: 30 });
-            let ultimoToken = "";
-
-            function actualizarRelojYQR() {
-                // 1. Calculamos los segundos exactos que le quedan al bloque actual de 30s del mundo
-                let segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
-                
-                // Si el cálculo da 30, visualmente mostramos 0 o 30 según prefieras, lo dejamos en sincronía
-                document.getElementById("countdown").textContent = segundosRestantes;
-
-                // 2. Generamos el token actual
-                const tokenActual = totp.now();
-                
-                // 3. SOLO redibujamos el QR si el token realmente cambió (para evitar que parpadee la pantalla cada 1 segundo)
-                if (tokenActual !== ultimoToken) {
-                    ultimoToken = tokenActual;
-                    const cadenaFinal = dni + "-" + tokenActual;
-                    console.log("Nuevo QR generado:", cadenaFinal);
-                    qrGenerador.makeCode(cadenaFinal);
+                // Inicializamos la librería TOTP con control de errores
+                if (typeof JSOTP === 'undefined') {
+                    throw new Error("La librería JSOTP no se cargó correctamente desde internet.");
                 }
+                
+                const totp = JSOTP.totp(user.semilla, { interval: 30 });
+                let ultimoToken = "";
+
+                function actualizarRelojYQR() {
+                    try {
+                        // 1. Calculamos los segundos exactos
+                        let segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
+                        
+                        // 2. Pintamos en el HTML
+                        document.getElementById("countdown").textContent = segundosRestantes;
+
+                        // 3. Procesamos el token
+                        const tokenActual = totp.now();
+                        
+                        if (tokenActual !== ultimoToken) {
+                            ultimoToken = tokenActual;
+                            const cadenaFinal = dni + "-" + tokenActual;
+                            qrGenerador.makeCode(cadenaFinal);
+                        }
+                    } catch (innerErr) {
+                        registrarError("Error adentro del bucle del reloj", innerErr);
+                    }
+                }
+
+                // Primer disparo manual inmediato
+                actualizarRelojYQR();
+
+                // Encendemos el segundero infinito
+                if (timerInterval !== -1) clearInterval(timerInterval);
+                timerInterval = setInterval(actualizarRelojYQR, 1000);
+
+            } catch (err) {
+                registrarError("Error crítico en mostrarCredencial", err);
             }
-
-            // Primer disparo inmediato para dibujar el QR y clavar el primer número en pantalla
-            setTimeout(actualizarRelojYQR, 100);
-
-            // Reloj infinito que revisa y descuenta el tiempo de forma estricta cada 1 segundo (1000ms)
-            if (timerInterval !== -1) clearInterval(timerInterval);
-            timerInterval = setInterval(actualizarRelojYQR, 1000);
         }
 
         function desvincular() {
@@ -131,6 +170,8 @@
                 localStorage.removeItem("cookins_dni");
                 document.getElementById("pantalla-credencial").style.display = "none";
                 document.getElementById("pantalla-registro").style.display = "block";
+                const errDiv = document.getElementById("debug-error");
+                if (errDiv) errDiv.remove();
             }
         }
     </script>
