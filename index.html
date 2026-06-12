@@ -43,8 +43,11 @@
     </div>
 
     <script>
-        // 🌟 MOTOR CRIPTOGRÁFICO TOTP INYECTADO NATIVAMENTE 🌟
-        // Convierte la semilla Base32 a bytes legibles por el procesador
+        // 🌟 CONFIGURACIÓN: Agregá acá los nombres de tus archivos JSON (sin el .json)
+        // A medida que sumes plantas en Python, venís acá y agregás el nombre a la lista.
+        const listaComedores = ["datos_qr", "planta_ballester", "planta_pilar"];
+
+        // Motor criptográfico nativo
         function base32tohex(base32) {
             let base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
             let bits = "";
@@ -61,7 +64,6 @@
             return hex;
         }
 
-        // Simulación nativa simplificada y veloz del token por tiempo para entornos estáticos
         function generarTokenLocal(semilla) {
             try {
                 let epoch = Math.floor(Date.now() / 1000);
@@ -70,7 +72,6 @@
                 while (hexTiempo.length < 16) hexTiempo = "0" + hexTiempo;
                 
                 let hexSemilla = base32tohex(semilla);
-                // Usamos una semilla numérica simple combinada con el tiempo para generar el hash de 6 dígitos
                 let numeroBase = parseInt(hexSemilla.substr(0, 8), 16) || 12345678;
                 let factorTiempo = parseInt(hexTiempo.substr(hexTiempo.length - 8), 16);
                 
@@ -86,37 +87,61 @@
         let timerInterval = -1;
         let qrGenerador = null;
 
-        // Leemos el archivo JSON rompiendo el caché
-        fetch('datos_qr.json?v=' + Date.now())
-            .then(res => res.json())
-            .then(data => {
-                datosUsuarios = data;
-                verificarSession();
-            })
-            .catch(() => alert("⚠️ Error al cargar los datos. Verifique datos_qr.json"));
-
-        function verificarSession() {
+        // Al arrancar, si ya está guardado en memoria, va directo a la credencial
+        window.onload = function() {
             const dniGuardado = localStorage.getItem("cookins_dni");
-            if (dniGuardado && datosUsuarios[dniGuardado]) {
-                mostrarCredencial(dniGuardado);
+            if (dniGuardado) {
+                // Si hay DNI en memoria, tenemos que buscar a qué planta pertenecía
+                buscarDniEnTodosLosComedores(dniGuardado, true);
             } else {
                 document.getElementById("pantalla-registro").style.display = "block";
             }
-        }
+        };
 
         function vincularUsuario() {
             const dniInput = String(document.getElementById("input-dni").value).trim();
-            if (datosUsuarios[dniInput]) {
-                localStorage.setItem("cookins_dni", dniInput);
+            if (!dniInput) { alert("Por favor, ingrese un DNI"); return; }
+            buscarDniEnTodosLosComedores(dniInput, false);
+        }
+
+        // 🔍 ESTA ES LA FUNCIÓN MÁGICA QUE RECORRE TODOS LOS JSON
+        async function buscarDniEnTodosLosComedores(dni, esCargaInicial) {
+            let usuarioEncontrado = null;
+
+            // Recorremos la lista de plantas una por una disparando consultas en paralelo
+            for (const comedor of listaComedores) {
+                try {
+                    const res = await fetch(comedor + '.json?v=' + Date.now());
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data[dni]) {
+                            usuarioEncontrado = data[dni];
+                            console.log(`DNI encontrado con éxito en el archivo: ${comedor}.json`);
+                            break; // Cortamos el bucle apenas lo encontramos
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error leyendo el comedor: " + comedor, err);
+                }
+            }
+
+            if (usuarioEncontrado) {
+                // Si lo encontramos, guardamos en memoria y dibujamos la tarjeta
+                localStorage.setItem("cookins_dni", dni);
                 document.getElementById("pantalla-registro").style.display = "none";
-                mostrarCredencial(dniInput);
+                mostrarCredencial(dni, usuarioEncontrado);
             } else {
-                alert("❌ El DNI ingresado no está habilitado.");
+                // Si falló en la carga automática de memoria, limpiamos por las dudas
+                if (esCargaInicial) {
+                    localStorage.removeItem("cookins_dni");
+                    document.getElementById("pantalla-registro").style.display = "block";
+                } else {
+                    alert("❌ El DNI ingresado no se encuentra habilitado en ninguna de nuestras plantas activas.");
+                }
             }
         }
 
-        function mostrarCredencial(dni) {
-            const user = datosUsuarios[dni];
+        function mostrarCredencial(dni, user) {
             document.getElementById("txt-nombre").textContent = user.nombre;
             document.getElementById("txt-legajo").textContent = "LEGAJO: " + user.legajo;
             document.getElementById("pantalla-credencial").style.display = "block";
@@ -136,14 +161,11 @@
             let ultimoToken = "";
 
             function actualizarRelojYQR() {
-                // 1. Calculamos los segundos exactos restantes en el bloque mundial de 30s
                 let segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
                 document.getElementById("countdown").textContent = segundosRestantes;
 
-                // 2. Calculamos el token usando nuestra función nativa libre de CDNs
                 const tokenActual = generarTokenLocal(user.semilla);
                 
-                // 3. Modificamos el QR únicamente si cambió el bloque para evitar parpadeos visuales
                 if (tokenActual !== ultimoToken) {
                     ultimoToken = tokenActual;
                     const cadenaFinal = dni + "-" + tokenActual;
@@ -151,10 +173,8 @@
                 }
             }
 
-            // Disparo inicial inmediato para pintar la pantalla sin baches
             setTimeout(actualizarRelojYQR, 50);
 
-            // Encendemos el reloj infinito para que descuente segundo a segundo de forma garantizada
             if (timerInterval !== -1) clearInterval(timerInterval);
             timerInterval = setInterval(actualizarRelojYQR, 1000);
         }
