@@ -47,15 +47,16 @@
         let datosUsuarios = {};
         let timerInterval = -1;
         let segundosRestantes = 30;
+        let qrGenerador = null; // Declaramos la variable globalmente
 
-        // Rompemos el caché del navegador para leer el JSON fresco siempre
+        // Leemos el archivo JSON rompiendo el caché
         fetch('datos_qr.json?v=' + Date.now())
             .then(res => res.json())
             .then(data => {
                 datosUsuarios = data;
                 verificarSesion();
             })
-            .catch(() => alert("⚠️ Error de sincronización. Asegúrese de que 'datos_qr.json' esté subido en la misma carpeta."));
+            .catch(() => alert("⚠️ Error al cargar los datos. Verifique datos_qr.json"));
 
         function verificarSesion() {
             const dniGuardado = localStorage.getItem("cookins_dni");
@@ -67,13 +68,13 @@
         }
 
         function vincularUsuario() {
-            const dniInput = document.getElementById("input-dni").value.trim();
+            const dniInput = String(document.getElementById("input-dni").value).trim();
             if (datosUsuarios[dniInput]) {
                 localStorage.setItem("cookins_dni", dniInput);
                 document.getElementById("pantalla-registro").style.display = "none";
                 mostrarCredencial(dniInput);
             } else {
-                alert("❌ El DNI ingresado no está habilitado para el comedor o falta sincronizar.");
+                alert("❌ El DNI ingresado no está habilitado.");
             }
         }
 
@@ -84,19 +85,33 @@
             document.getElementById("pantalla-credencial").style.display = "block";
 
             const qrContenedor = document.getElementById("qrcode");
-            qrContenedor.innerHTML = "";
-            let qrGenerador = new QRCode(qrContenedor, { width: 220, height: 220 });
+            qrContenedor.innerHTML = ""; // Limpiamos cualquier intento previo
+
+            // Instanciamos el generador de QR asegurando parámetros limpios
+            qrGenerador = new QRCode(qrContenedor, {
+                text: "Inicializando...",
+                width: 220,
+                height: 220,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
 
             const totp = JSOTP.totp(user.semilla, { interval: 30 });
 
             function actualizarQR() {
                 const tokenActual = totp.now();
-                qrGenerador.makeCode(dni + "-" + tokenActual);
+                const cadenaFinal = dni + "-" + tokenActual;
+                console.log("Generando QR para:", cadenaFinal); // Para revisar en F12 si hiciera falta
+                qrGenerador.makeCode(cadenaFinal);
             }
 
+            // Sincronización del segundero mundial
             segundosRestantes = 30 - (Math.floor(Date.now() / 1000) % 30);
             document.getElementById("countdown").textContent = segundosRestantes;
-            actualizarQR();
+            
+            // Forzamos el primer renderizado con un delay de 100ms para darle tiempo al HTML
+            setTimeout(actualizarQR, 100);
 
             if (timerInterval !== -1) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
