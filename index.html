@@ -35,11 +35,24 @@
     </div>
 
     <div class="card" id="pantalla-credencial" style="display: none;">
-        <h3 id="txt-nombre">---</h3>
-        <span class="badge" id="txt-legajo">LEGAJO: ---</span>
-        <div id="qrcode" style="width: 220px; height: 220px; margin: 25px auto; display: block;"></div>
-        <div class="timer">El código QR cambia en: <b id="countdown">30</b>s</div>
-        <button class="btn-link" onclick="desvincular()">Desvincular celular</button>
+    <h3 id="txt-nombre">---</h3>
+    <span class="badge" id="txt-legajo">LEGAJO: ---</span>
+    
+    <div id="qrcode" style="
+        width: 220px; 
+        height: 220px; 
+        margin: 25px auto; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        background-color: #FFFFFF !important; /* Blanco absoluto inmune al modo oscuro */
+        padding: 15px; /* Margen interno para que el lector distinga los bordes del QR */
+        border-radius: 8px; /* Opcional, queda más estético */
+        box-sizing: content-box; /* Evita que el padding achique el QR */
+    "></div>
+    
+    <div class="timer">El código QR cambia en: <b id="countdown">30</b>s</div>
+    <button class="btn-link" onclick="desvincular()">Desvincular celular</button>
     </div>
 
     <script>
